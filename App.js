@@ -16,13 +16,8 @@ const deviceWidth = Dimensions.get( 'window' ).width;
 const deviceHeight = Dimensions.get( 'window' ).height;
 
 // Service/Characteristics relevent UUID constants
+// TODO: Find relevent/useful UUID's in integration guide
 const SPOT_CHECK = ''; 
-
-// scan Button
-// show any devices in a thouchable list
-// select a device, and connect
-// pull services and characteristics
-// send commands to device?
 
 export default class App extends React.Component {
   constructor( props ) {
@@ -43,6 +38,7 @@ export default class App extends React.Component {
       ...this.initialState
     };
 
+    // context binding for component methods
     this.scanForDevices = this.scanForDevices.bind( this );
     this.getDeviceServices = this.getDeviceServices.bind( this );
     this.getDeviceCharacteristics = this.getDeviceCharacteristics.bind( this );
@@ -50,26 +46,28 @@ export default class App extends React.Component {
   }
 
   componentDidMount() {
+    // confirm that bluetooth is enabled(?) on the device
     const subscription = this.manager.onStateChange((state) => {
         if (state === 'PoweredOn') {
-            // this.scanAndConnect();
             // this.setState( { btIsPowered: true } );
             subscription.remove();
         }
     }, true);
   }
 
-  // gets all nonin devices and sets them to state
+  // gets all advertising nonin devices and stores them in the app state
   scanForDevices() {
-    // scan for 10sec then notify: no device found
     if ( this.state.isScanning ) return;
+
+    // scan for 10sec then notify: no device found
     this.setState( { isScanning: true } )
+
     this.manager.startDeviceScan( null, null, ( error, device ) => {
       if ( error ) return console.log( error );
 
       if ( device.name && device.name.startsWith( 'Nonin' ) ) {
-        // add the advertising nonin device to the stream
-        // only if its not already stored!
+        // add the advertising nonin device to the state
+        // only if its not already stored
         const advertisingDevices = this.state.advertisingDevices;
         const advertisingDeviceNames = this.state.advertisingDeviceNames;
 
@@ -87,8 +85,8 @@ export default class App extends React.Component {
       this.setState( { isScanning: false } );
 
       if ( this.state.advertisingDevices.length < 1 ) {
-        // no nonin devices were found, notify user
-        // this.setState( { advertisingDeviceNames: [] } );
+        // TODO: no nonin devices were found, notify user with a toast
+
       }
 
     }, 10000 );
@@ -166,20 +164,21 @@ export default class App extends React.Component {
       this.state.deviceServices[0].foundCharacteristics &&
       this.state.deviceServices[0].foundCharacteristics.length > 0;
 
-    // array of devices names found during scan, if any
+    // array of device names found during scan, if any
     const advertisingDeviceNames = 
-      this.state.advertisingDeviceNames.length > 0 &&
-      this.state.advertisingDeviceNames.map( ( deviceName, i ) => {
-        return (
-          <TouchableHighlight 
-            style={ styles.scannedDevice } 
-            key={ i }
-            onPress={ this.connectToDevice.bind( this, i ) }
-          >
-            <Text>{ deviceName }</Text>
-          </TouchableHighlight>
-        );
-      } );
+      this.state.advertisingDeviceNames.length < 1
+        ? <Text>...</Text>
+        : this.state.advertisingDeviceNames.map( ( deviceName, i ) => {
+          return (
+            <TouchableHighlight 
+              style={ styles.scannedDevice } 
+              key={ i }
+              onPress={ this.connectToDevice.bind( this, i ) }
+            >
+              <Text>{ deviceName }</Text>
+            </TouchableHighlight>
+          );
+        } );
 
       const scanButton = 
         isScanning
@@ -212,6 +211,7 @@ export default class App extends React.Component {
         />
         <View style={ styles.oximeteryReading }></View>
         <View style={ styles.pulseReading }></View>
+
         <Text style={ styles.scannedDevice }>{ `Connected: ${ isConnected }`  }</Text>
         <Text style={ styles.scannedDevice }>{ `Scanning: ${ isScanning }` }</Text>
         <Text style={ styles.scannedDevice }>{ `Services Retrieved: ${ haveServices }` }</Text>
@@ -223,7 +223,8 @@ export default class App extends React.Component {
             : scanButton
         }
         <View>
-          { advertisingDeviceNames.length > 0
+          { 
+            advertisingDeviceNames.length > 0
               ? advertisingDeviceNames
               : <Text style={ styles.scannedDevice }>No Nonin devices found...</Text>
           }
