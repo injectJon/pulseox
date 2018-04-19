@@ -1,13 +1,233 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { 
+  StyleSheet, 
+  Text, 
+  View,
+  Button,
+  ListView,
+  TouchableHighlight,
+  Image,
+  Dimensions,
+  ToastAndroid } from 'react-native';
+import { BleManager } from 'react-native-ble-plx';
+
+// Get device dimensions on startup
+const deviceWidth = Dimensions.get( 'window' ).width;
+const deviceHeight = Dimensions.get( 'window' ).height;
+
+// Service/Characteristics relevent UUID constants
+const SPOT_CHECK = ''; 
+
+// scan Button
+// show any devices in a thouchable list
+// select a device, and connect
+// pull services and characteristics
+// send commands to device?
 
 export default class App extends React.Component {
+  constructor( props ) {
+    super( props );
+
+    this.manager = new BleManager();
+
+    this.initialState = {
+      advertisingDevices: [],
+      advertisingDeviceNames: [],
+      device: '',
+      deviceServices: [],
+      isScanning: false,
+      isConnected: false,
+    }
+
+    this.state = {
+      ...this.initialState
+    };
+
+    this.scanForDevices = this.scanForDevices.bind( this );
+    this.getDeviceServices = this.getDeviceServices.bind( this );
+    this.getDeviceCharacteristics = this.getDeviceCharacteristics.bind( this );
+    this.disconnectFromDevice = this.disconnectFromDevice.bind( this );
+  }
+
+  componentDidMount() {
+    const subscription = this.manager.onStateChange((state) => {
+        if (state === 'PoweredOn') {
+            // this.scanAndConnect();
+            // this.setState( { btIsPowered: true } );
+            subscription.remove();
+        }
+    }, true);
+  }
+
+  // gets all nonin devices and sets them to state
+  scanForDevices() {
+    // scan for 10sec then notify: no device found
+    if ( this.state.isScanning ) return;
+    this.setState( { isScanning: true } )
+    this.manager.startDeviceScan( null, null, ( error, device ) => {
+      if ( error ) return console.log( error );
+
+      if ( device.name && device.name.startsWith( 'Nonin' ) ) {
+        // add the advertising nonin device to the stream
+        // only if its not already stored!
+        const advertisingDevices = this.state.advertisingDevices;
+        const advertisingDeviceNames = this.state.advertisingDeviceNames;
+
+        if ( advertisingDeviceNames.indexOf( device.name ) < 0 ) {
+          advertisingDevices.push( device );
+          advertisingDeviceNames.push( device.name );
+
+          this.setState( { advertisingDevices, advertisingDeviceNames } );
+        }
+      }
+    } );
+
+    setTimeout( () => {
+      this.manager.stopDeviceScan();
+      this.setState( { isScanning: false } );
+
+      if ( this.state.advertisingDevices.length < 1 ) {
+        // no nonin devices were found, notify user
+        // this.setState( { advertisingDeviceNames: [] } );
+      }
+
+    }, 10000 );
+
+  }
+
+  // takes a device name and connects to said device
+  connectToDevice( deviceIndex ) {
+    // console.log( ref );
+    console.log( deviceIndex );
+    const device = this.state.advertisingDevices[ deviceIndex ];
+    // console.log( device );
+
+    // connect to selected device
+    this.manager.connectToDevice( device.id )
+      .then( device => {
+        return device.discoverAllServicesAndCharacteristics();
+      } )
+      .then( device => {
+        console.log( device );
+        this.setState( { device, isConnected: true } );
+
+        // handle device disconnect
+        device.onDisconnected( ( error, disconnectedDevice ) => {
+          this.setState( { ...this.initialState } );
+        } );
+
+        this.getDeviceServices( device );
+      } )
+      .catch( error => {
+        console.log( error );
+      } );
+
+  }
+
+  getDeviceServices( device ) {
+    // get services
+    device.services()
+      .then( services => {
+        const deviceServices = this.state.deviceServices.concat( services );
+        this.setState( { deviceServices } )
+        this.getDeviceCharacteristics( services );
+      } );
+  }
+
+  getDeviceCharacteristics() {
+    const deviceServices = this.state.deviceServices;
+    deviceServices.forEach( service => {
+
+      service.characteristics()
+        .then( characteristics => {
+          service.foundCharacteristics = characteristics;
+        } )
+    } );
+  }
+
+  disconnectFromDevice() {
+    // disconnect and wipe state
+    const device = this.state.device;
+
+    device.cancelConnection()
+      .then( cancelledDevice => {
+        // TODO: create an initial state class property
+        this.setState( { ...this.initialState } );
+      } );
+  }
+
   render() {
+    // app state boolean constants
+    const isConnected = this.state.isConnected;
+    const isScanning = this.state.isScanning;
+    const haveServices = this.state.deviceServices.length > 0;
+    const haveCharacteristics = 
+      haveServices && 
+      this.state.deviceServices[0].foundCharacteristics &&
+      this.state.deviceServices[0].foundCharacteristics.length > 0;
+
+    // array of devices names found during scan, if any
+    const advertisingDeviceNames = 
+      this.state.advertisingDeviceNames.length > 0 &&
+      this.state.advertisingDeviceNames.map( ( deviceName, i ) => {
+        return (
+          <TouchableHighlight 
+            style={ styles.scannedDevice } 
+            key={ i }
+            onPress={ this.connectToDevice.bind( this, i ) }
+          >
+            <Text>{ deviceName }</Text>
+          </TouchableHighlight>
+        );
+      } );
+
+      const scanButton = 
+        isScanning
+          ? (
+              <Button 
+                title={ 'Scanning...' } 
+                disabled={ true }
+                onPress={ this.scanForDevices } 
+              />
+            )
+          : (
+              <Button 
+                title={ 'Scan for Devices' } 
+                onPress={ this.scanForDevices } 
+              />
+            )
+
+      const disconnectButton = (
+        <Button 
+          title={ 'Disconnect From Device' }
+          onPress={ this.disconnectFromDevice }
+        /> 
+      )
+    
     return (
-      <View style={styles.container}>
-        <Text>Open up App.js to start working on your app!</Text>
-        <Text>Changes you make will automatically reload.</Text>
-        <Text>Shake your phone to open the developer menu.</Text>
+      <View style={ styles.container }>
+        <Image
+          style={ styles.logo }
+          source={ require( './assets/nonin.png' ) }
+        />
+        <View style={ styles.oximeteryReading }></View>
+        <View style={ styles.pulseReading }></View>
+        <Text style={ styles.scannedDevice }>{ `Connected: ${ isConnected }`  }</Text>
+        <Text style={ styles.scannedDevice }>{ `Scanning: ${ isScanning }` }</Text>
+        <Text style={ styles.scannedDevice }>{ `Services Retrieved: ${ haveServices }` }</Text>
+        <Text style={ styles.scannedDevice }>{ `Characteristics Retrieved: ${ haveCharacteristics || false }` }</Text>
+        
+        {
+          isConnected
+            ? disconnectButton
+            : scanButton
+        }
+        <View>
+          { advertisingDeviceNames.length > 0
+              ? advertisingDeviceNames
+              : <Text style={ styles.scannedDevice }>No Nonin devices found...</Text>
+          }
+        </View>
       </View>
     );
   }
@@ -18,6 +238,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
+  logo: {
+    width: deviceWidth - 100,
+    height: 100,
+  },
+  oximeteryReading: {
+
+  },
+  pulseReading: {
+
+  },
+  scanButton: {
+    // minWidth: deviceWidth - 100,
+    // margin: 10,
+  },
+  scannedDevice: {
+    margin: 10,
+  }
 });
