@@ -10,6 +10,7 @@ import {
   Dimensions,
   ToastAndroid } from 'react-native';
 import { BleManager } from 'react-native-ble-plx';
+import base64js from 'base64-js';
 
 // Get device dimensions on startup
 const deviceWidth = Dimensions.get( 'window' ).width;
@@ -17,6 +18,7 @@ const deviceHeight = Dimensions.get( 'window' ).height;
 
 // Service/Characteristics relevent UUID constants
 // TODO: Find relevent/useful UUID's in integration guide
+const NONIN_OXIMETRY_SERVICE_UUID = '46a970e0-0d5f-11e2-8b5e-0002a5d5c51b';
 const SPOT_CHECK = ''; 
 
 export default class App extends React.Component {
@@ -26,12 +28,14 @@ export default class App extends React.Component {
     this.manager = new BleManager();
 
     this.initialState = {
-      advertisingDevices: [],
-      advertisingDeviceNames: [],
+      advertisingDevices: new Array(),
+      advertisingDeviceNames: new Array(),
       device: '',
-      deviceServices: [],
+      deviceServices: new Array(),
       isScanning: false,
       isConnected: false,
+      oximetryCharacteristic: '',
+      oximetryMonitorData: new Array(),
     }
 
     this.state = {
@@ -125,22 +129,67 @@ export default class App extends React.Component {
   getDeviceServices( device ) {
     // get services
     device.services()
+      // store only oximetry measurement service
       .then( services => {
-        const deviceServices = this.state.deviceServices.concat( services );
-        this.setState( { deviceServices } )
-        this.getDeviceCharacteristics( services );
+        const deviceServices = this.state.deviceServices;
+        deviceServices.push( services[ 2 ] );
+
+        this.setState( { deviceServices } );
+
+        this.getDeviceCharacteristics();
       } );
+
+      // store all the services in state
+      // .then( services => {
+      //   const deviceServices = this.state.deviceServices.concat( services );
+      //   this.setState( { deviceServices } )
+      //   this.getDeviceCharacteristics( services );
+      // } );
   }
 
   getDeviceCharacteristics() {
     const deviceServices = this.state.deviceServices;
-    deviceServices.forEach( service => {
 
-      service.characteristics()
-        .then( characteristics => {
-          service.foundCharacteristics = characteristics;
-        } )
-    } );
+    deviceServices[ 0 ].characteristics()
+      .then( characteristics => {
+        const oximetryCharacteristic = characteristics[ 0 ];
+        this.setState( { oximetryCharacteristic } );
+
+        // subscribe to notifications for this characteristic
+        oximetryCharacteristic.monitor( ( error, characteristic, transactionId ) => {
+          const oximetryMonitorData = this.state.oximetryMonitorData;
+          const newDataArray = [];
+
+          const newMonitorData = base64js.toByteArray( characteristic.value );
+
+          console.log( newDataArray.concat( newMonitorData ) );
+          oximetryMonitorData.push( newMonitorData );
+
+          this.setState( { oximetryMonitorData } );
+        } );
+      } );
+
+    // get all characteristics for ALL services
+    // deviceServices.forEach( ( service, i ) => {
+
+    //   service.characteristics()
+    //     .then( characteristics => {
+    //       service.foundCharacteristics = characteristics;
+    //     } )
+
+    //     if ( deviceServices.length === i+1 ) {
+    //       // log services object (without manager field)
+
+    //       // const data = { ...this.state.deviceServices };
+    //       // console.log( data );
+
+    //       // isolates the Nonin Oximetry Characteristic
+    //       const oximetryCharacteristic = deviceServices[ 2 ].foundCharacteristics[ 0 ];
+    //       this.setState( { oximetryCharacteristic } );
+
+    //       console.log( oximetryCharacteristic );
+    //     }
+    // } );
   }
 
   disconnectFromDevice() {
@@ -150,7 +199,15 @@ export default class App extends React.Component {
     device.cancelConnection()
       .then( cancelledDevice => {
         // TODO: create an initial state class property
-        this.setState( { ...this.initialState } );
+        this.setState( { 
+          advertisingDevices: new Array(),
+          advertisingDeviceNames: new Array(),
+          device: '',
+          deviceServices: new Array(),
+          isScanning: false,
+          isConnected: false,
+          oximetryMonitorData: new Array(),
+        } );
       } );
   }
 
@@ -163,6 +220,7 @@ export default class App extends React.Component {
       haveServices && 
       this.state.deviceServices[0].foundCharacteristics &&
       this.state.deviceServices[0].foundCharacteristics.length > 0;
+    const haveOximetryNotifications = this.state.oximetryMonitorData.length > 0;
 
     // array of device names found during scan, if any
     const advertisingDeviceNames = 
@@ -179,6 +237,16 @@ export default class App extends React.Component {
             </TouchableHighlight>
           );
         } );
+
+      const dataLog = 
+        !haveOximetryNotifications
+          ? <Text>No oximetry notification data yet...</Text>
+          : this.state.oximetryMonitorData.map( ( value, i ) => {
+            return (
+              <Text key={ i }>{ value.toString() }</Text>
+            )
+          } )
+        
 
       const scanButton = 
         isScanning
@@ -227,6 +295,11 @@ export default class App extends React.Component {
             advertisingDeviceNames.length > 0
               ? advertisingDeviceNames
               : <Text style={ styles.scannedDevice }>No Nonin devices found...</Text>
+          }
+        </View>
+        <View>
+          {
+            dataLog
           }
         </View>
       </View>
