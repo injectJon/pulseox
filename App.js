@@ -1,7 +1,7 @@
 import React from 'react';
-import { 
-  StyleSheet, 
-  Text, 
+import {
+  StyleSheet,
+  Text,
   View,
   Button,
   ListView,
@@ -19,7 +19,7 @@ const deviceHeight = Dimensions.get( 'window' ).height;
 // Service/Characteristics relevent UUID constants
 // TODO: Find relevent/useful UUID's in integration guide
 const NONIN_OXIMETRY_SERVICE_UUID = '46a970e0-0d5f-11e2-8b5e-0002a5d5c51b';
-const SPOT_CHECK = ''; 
+const SPOT_CHECK = '';
 
 export default class App extends React.Component {
   constructor( props ) {
@@ -36,6 +36,10 @@ export default class App extends React.Component {
       isConnected: false,
       oximetryCharacteristic: '',
       oximetryMonitorData: new Array(),
+      updatedReading: {
+        oximetry: '',
+        pulse: '',
+      }
     }
 
     this.state = {
@@ -99,10 +103,8 @@ export default class App extends React.Component {
 
   // takes a device name and connects to said device
   connectToDevice( deviceIndex ) {
-    // console.log( ref );
     console.log( deviceIndex );
     const device = this.state.advertisingDevices[ deviceIndex ];
-    // console.log( device );
 
     // connect to selected device
     this.manager.connectToDevice( device.id )
@@ -110,7 +112,8 @@ export default class App extends React.Component {
         return device.discoverAllServicesAndCharacteristics();
       } )
       .then( device => {
-        console.log( device );
+        // TODO: Toast and ask for spot-check/continuous functionality
+
         this.setState( { device, isConnected: true } );
 
         // handle device disconnect
@@ -121,7 +124,7 @@ export default class App extends React.Component {
         this.getDeviceServices( device );
       } )
       .catch( error => {
-        console.log( error );
+        console.error( error );
       } );
 
   }
@@ -138,13 +141,6 @@ export default class App extends React.Component {
 
         this.getDeviceCharacteristics();
       } );
-
-      // store all the services in state
-      // .then( services => {
-      //   const deviceServices = this.state.deviceServices.concat( services );
-      //   this.setState( { deviceServices } )
-      //   this.getDeviceCharacteristics( services );
-      // } );
   }
 
   getDeviceCharacteristics() {
@@ -158,38 +154,20 @@ export default class App extends React.Component {
         // subscribe to notifications for this characteristic
         oximetryCharacteristic.monitor( ( error, characteristic, transactionId ) => {
           const oximetryMonitorData = this.state.oximetryMonitorData;
-          const newDataArray = [];
 
           const newMonitorData = base64js.toByteArray( characteristic.value );
 
-          console.log( newDataArray.concat( newMonitorData ) );
+          const updatedReading = {
+            oximetry: newMonitorData[ 7 ],
+            pulse: newMonitorData[ 9 ],
+          }
+
+          // console.log( newMonitorData );
           oximetryMonitorData.push( newMonitorData );
 
-          this.setState( { oximetryMonitorData } );
+          this.setState( { oximetryMonitorData, updatedReading } );
         } );
       } );
-
-    // get all characteristics for ALL services
-    // deviceServices.forEach( ( service, i ) => {
-
-    //   service.characteristics()
-    //     .then( characteristics => {
-    //       service.foundCharacteristics = characteristics;
-    //     } )
-
-    //     if ( deviceServices.length === i+1 ) {
-    //       // log services object (without manager field)
-
-    //       // const data = { ...this.state.deviceServices };
-    //       // console.log( data );
-
-    //       // isolates the Nonin Oximetry Characteristic
-    //       const oximetryCharacteristic = deviceServices[ 2 ].foundCharacteristics[ 0 ];
-    //       this.setState( { oximetryCharacteristic } );
-
-    //       console.log( oximetryCharacteristic );
-    //     }
-    // } );
   }
 
   disconnectFromDevice() {
@@ -199,7 +177,7 @@ export default class App extends React.Component {
     device.cancelConnection()
       .then( cancelledDevice => {
         // TODO: create an initial state class property
-        this.setState( { 
+        this.setState( {
           advertisingDevices: new Array(),
           advertisingDeviceNames: new Array(),
           device: '',
@@ -216,20 +194,32 @@ export default class App extends React.Component {
     const isConnected = this.state.isConnected;
     const isScanning = this.state.isScanning;
     const haveServices = this.state.deviceServices.length > 0;
-    const haveCharacteristics = 
-      haveServices && 
+    const haveCharacteristics =
+      haveServices &&
       this.state.deviceServices[0].foundCharacteristics &&
       this.state.deviceServices[0].foundCharacteristics.length > 0;
     const haveOximetryNotifications = this.state.oximetryMonitorData.length > 0;
+    const haveOximetryReading = ( this.state.updatedReading.oximetry );
+    const havePulseReading = ( this.state.updatedReading.pulse );
+
+    const readings =
+      ( haveOximetryReading && havePulseReading )
+        ? (
+            <View>
+              <Text style={ styles.readings }>{ `SpO2: ${ this.state.updatedReading.oximetry }` }</Text>
+              <Text style={ styles.readings }>{ `(<3): ${ this.state.updatedReading.pulse }` }</Text>
+            </View>
+          )
+        : <Text>No Readings..</Text>
 
     // array of device names found during scan, if any
-    const advertisingDeviceNames = 
+    const advertisingDeviceNames =
       this.state.advertisingDeviceNames.length < 1
         ? <Text>...</Text>
         : this.state.advertisingDeviceNames.map( ( deviceName, i ) => {
           return (
-            <TouchableHighlight 
-              style={ styles.scannedDevice } 
+            <TouchableHighlight
+              style={ styles.scannedDevice }
               key={ i }
               onPress={ this.connectToDevice.bind( this, i ) }
             >
@@ -238,7 +228,7 @@ export default class App extends React.Component {
           );
         } );
 
-      const dataLog = 
+      const dataLog =
         !haveOximetryNotifications
           ? <Text>No oximetry notification data yet...</Text>
           : this.state.oximetryMonitorData.map( ( value, i ) => {
@@ -246,60 +236,59 @@ export default class App extends React.Component {
               <Text key={ i }>{ value.toString() }</Text>
             )
           } )
-        
 
-      const scanButton = 
+
+      const scanButton =
         isScanning
           ? (
-              <Button 
-                title={ 'Scanning...' } 
+              <Button
+                title={ 'Scanning...' }
                 disabled={ true }
-                onPress={ this.scanForDevices } 
+                onPress={ this.scanForDevices }
               />
             )
           : (
-              <Button 
-                title={ 'Scan for Devices' } 
-                onPress={ this.scanForDevices } 
+              <Button
+                title={ 'Scan for Devices' }
+                onPress={ this.scanForDevices }
               />
             )
 
       const disconnectButton = (
-        <Button 
+        <Button
           title={ 'Disconnect From Device' }
           onPress={ this.disconnectFromDevice }
-        /> 
+        />
       )
-    
+
     return (
       <View style={ styles.container }>
         <Image
           style={ styles.logo }
           source={ require( './assets/nonin.png' ) }
         />
+        {
+          readings
+        }
+
         <View style={ styles.oximeteryReading }></View>
         <View style={ styles.pulseReading }></View>
 
-        <Text style={ styles.scannedDevice }>{ `Connected: ${ isConnected }`  }</Text>
+        {/* <Text style={ styles.scannedDevice }>{ `Connected: ${ isConnected }`  }</Text>
         <Text style={ styles.scannedDevice }>{ `Scanning: ${ isScanning }` }</Text>
         <Text style={ styles.scannedDevice }>{ `Services Retrieved: ${ haveServices }` }</Text>
-        <Text style={ styles.scannedDevice }>{ `Characteristics Retrieved: ${ haveCharacteristics || false }` }</Text>
-        
+        <Text style={ styles.scannedDevice }>{ `Characteristics Retrieved: ${ haveCharacteristics || false }` }</Text> */}
+
         {
           isConnected
             ? disconnectButton
             : scanButton
         }
         <View>
-          { 
+          {
             advertisingDeviceNames.length > 0
               ? advertisingDeviceNames
               : <Text style={ styles.scannedDevice }>No Nonin devices found...</Text>
-          }
-        </View>
-        <View>
-          {
-            dataLog
           }
         </View>
       </View>
@@ -329,6 +318,10 @@ const styles = StyleSheet.create({
     // margin: 10,
   },
   scannedDevice: {
+    margin: 10,
+  },
+  readings: {
+    fontSize: 72,
     margin: 10,
   }
 });
