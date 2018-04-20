@@ -12,14 +12,14 @@ import {
 import { BleManager } from 'react-native-ble-plx';
 import base64js from 'base64-js';
 
+// component imports
+import Nonin3230 from './components/Nonin3230';
+
 // Get device dimensions on startup
 const deviceWidth = Dimensions.get( 'window' ).width;
 const deviceHeight = Dimensions.get( 'window' ).height;
 
-// Service/Characteristics relevent UUID constants
-// TODO: Find relevent/useful UUID's in integration guide
-const NONIN_OXIMETRY_SERVICE_UUID = '46a970e0-0d5f-11e2-8b5e-0002a5d5c51b';
-const SPOT_CHECK = '';
+// TODO: use AsyncStorage to store paired devices
 
 export default class App extends React.Component {
   constructor( props ) {
@@ -31,15 +31,8 @@ export default class App extends React.Component {
       advertisingDevices: new Array(),
       advertisingDeviceNames: new Array(),
       device: '',
-      deviceServices: new Array(),
       isScanning: false,
       isConnected: false,
-      oximetryCharacteristic: '',
-      oximetryMonitorData: new Array(),
-      updatedReading: {
-        oximetry: '',
-        pulse: '',
-      }
     }
 
     this.state = {
@@ -48,8 +41,6 @@ export default class App extends React.Component {
 
     // context binding for component methods
     this.scanForDevices = this.scanForDevices.bind( this );
-    this.getDeviceServices = this.getDeviceServices.bind( this );
-    this.getDeviceCharacteristics = this.getDeviceCharacteristics.bind( this );
     this.disconnectFromDevice = this.disconnectFromDevice.bind( this );
   }
 
@@ -103,7 +94,6 @@ export default class App extends React.Component {
 
   // takes a device name and connects to said device
   connectToDevice( deviceIndex ) {
-    console.log( deviceIndex );
     const device = this.state.advertisingDevices[ deviceIndex ];
 
     // connect to selected device
@@ -120,54 +110,11 @@ export default class App extends React.Component {
         device.onDisconnected( ( error, disconnectedDevice ) => {
           this.setState( { ...this.initialState } );
         } );
-
-        this.getDeviceServices( device );
       } )
       .catch( error => {
         console.error( error );
       } );
 
-  }
-
-  getDeviceServices( device ) {
-    // get services
-    device.services()
-      // store only oximetry measurement service
-      .then( services => {
-        const deviceServices = this.state.deviceServices;
-        deviceServices.push( services[ 2 ] );
-
-        this.setState( { deviceServices } );
-
-        this.getDeviceCharacteristics();
-      } );
-  }
-
-  getDeviceCharacteristics() {
-    const deviceServices = this.state.deviceServices;
-
-    deviceServices[ 0 ].characteristics()
-      .then( characteristics => {
-        const oximetryCharacteristic = characteristics[ 0 ];
-        this.setState( { oximetryCharacteristic } );
-
-        // subscribe to notifications for this characteristic
-        oximetryCharacteristic.monitor( ( error, characteristic, transactionId ) => {
-          const oximetryMonitorData = this.state.oximetryMonitorData;
-
-          const newMonitorData = base64js.toByteArray( characteristic.value );
-
-          const updatedReading = {
-            oximetry: newMonitorData[ 7 ],
-            pulse: newMonitorData[ 9 ],
-          }
-
-          // console.log( newMonitorData );
-          oximetryMonitorData.push( newMonitorData );
-
-          this.setState( { oximetryMonitorData, updatedReading } );
-        } );
-      } );
   }
 
   disconnectFromDevice() {
@@ -176,120 +123,91 @@ export default class App extends React.Component {
 
     device.cancelConnection()
       .then( cancelledDevice => {
-        // TODO: create an initial state class property
-        this.setState( {
-          advertisingDevices: new Array(),
-          advertisingDeviceNames: new Array(),
-          device: '',
-          deviceServices: new Array(),
-          isScanning: false,
-          isConnected: false,
-          oximetryMonitorData: new Array(),
-        } );
+        this.setState( { ...this.initialState } );
       } );
   }
 
   render() {
-    // app state boolean constants
+    // app state constants
     const isConnected = this.state.isConnected;
     const isScanning = this.state.isScanning;
-    const haveServices = this.state.deviceServices.length > 0;
-    const haveCharacteristics =
-      haveServices &&
-      this.state.deviceServices[0].foundCharacteristics &&
-      this.state.deviceServices[0].foundCharacteristics.length > 0;
-    const haveOximetryNotifications = this.state.oximetryMonitorData.length > 0;
-    const haveOximetryReading = ( this.state.updatedReading.oximetry );
-    const havePulseReading = ( this.state.updatedReading.pulse );
-
-    const readings =
-      ( haveOximetryReading && havePulseReading )
-        ? (
-            <View>
-              <Text style={ styles.readings }>{ `SpO2: ${ this.state.updatedReading.oximetry }` }</Text>
-              <Text style={ styles.readings }>{ `(<3): ${ this.state.updatedReading.pulse }` }</Text>
-            </View>
-          )
-        : <Text>No Readings..</Text>
+    const device = this.state.device;
+    const advertisingDeviceNames = this.state.advertisingDeviceNames;
 
     // array of device names found during scan, if any
-    const advertisingDeviceNames =
-      this.state.advertisingDeviceNames.length < 1
-        ? <Text>...</Text>
-        : this.state.advertisingDeviceNames.map( ( deviceName, i ) => {
+    const deviceNames =
+      this.state.advertisingDeviceNames.length > 0 &&
+        this.state.advertisingDeviceNames.map( ( deviceName, i ) => {
+          const borderColor =
+            isConnected && deviceName === device.name
+              ? '#ee7b22'
+              : '#4d8ecb'
+
           return (
             <TouchableHighlight
-              style={ styles.scannedDevice }
+              style={ [ styles.scannedDevice, { borderColor } ] }
               key={ i }
               onPress={ this.connectToDevice.bind( this, i ) }
             >
-              <Text>{ deviceName }</Text>
+              <Text style={ styles.scannedDeviceText }>{ deviceName }</Text>
             </TouchableHighlight>
           );
         } );
 
-      const dataLog =
-        !haveOximetryNotifications
-          ? <Text>No oximetry notification data yet...</Text>
-          : this.state.oximetryMonitorData.map( ( value, i ) => {
-            return (
-              <Text key={ i }>{ value.toString() }</Text>
-            )
-          } )
+    const scanButton =
+      isScanning
+        ? (
+            <Button
+              title={ 'Scanning...' }
+              disabled={ true }
+              onPress={ this.scanForDevices }
+            />
+          )
+        : (
+            <Button
+              title={ 'Scan for Devices' }
+              onPress={ this.scanForDevices }
+              color={ '#4d8ecb' }
+            />
+          );
 
+    const disconnectButton = (
+      <Button
+        title={ 'Disconnect From Device' }
+        onPress={ this.disconnectFromDevice }
+        color={ '#4d8ecb' }
+      />
+    );
 
-      const scanButton =
-        isScanning
-          ? (
-              <Button
-                title={ 'Scanning...' }
-                disabled={ true }
-                onPress={ this.scanForDevices }
-              />
-            )
-          : (
-              <Button
-                title={ 'Scan for Devices' }
-                onPress={ this.scanForDevices }
-              />
-            )
+    const connectionManagementButton =
+      isConnected
+        ? <View style={ styles.connectionManagementButton }>{ disconnectButton }</View>
+        : <View style={ styles.connectionManagementButton }>{ scanButton }</View>;
 
-      const disconnectButton = (
-        <Button
-          title={ 'Disconnect From Device' }
-          onPress={ this.disconnectFromDevice }
-        />
-      )
+    const deviceSpecificComponent =
+      isConnected
+        ? (
+          <Nonin3230
+            device={ device }
+            isConnected={ isConnected }
+          />
+        )
+        : <View></View>
 
     return (
       <View style={ styles.container }>
+
         <Image
           style={ styles.logo }
           source={ require( './assets/nonin.png' ) }
         />
-        {
-          readings
-        }
+        <View style={ styles.deviceSpecificComponent }>
+          { deviceSpecificComponent }
+        </View>
+        <View style={ styles.connectionManagement }>
+          { connectionManagementButton }
 
-        <View style={ styles.oximeteryReading }></View>
-        <View style={ styles.pulseReading }></View>
-
-        {/* <Text style={ styles.scannedDevice }>{ `Connected: ${ isConnected }`  }</Text>
-        <Text style={ styles.scannedDevice }>{ `Scanning: ${ isScanning }` }</Text>
-        <Text style={ styles.scannedDevice }>{ `Services Retrieved: ${ haveServices }` }</Text>
-        <Text style={ styles.scannedDevice }>{ `Characteristics Retrieved: ${ haveCharacteristics || false }` }</Text> */}
-
-        {
-          isConnected
-            ? disconnectButton
-            : scanButton
-        }
-        <View>
-          {
-            advertisingDeviceNames.length > 0
-              ? advertisingDeviceNames
-              : <Text style={ styles.scannedDevice }>No Nonin devices found...</Text>
-          }
+            { deviceNames || <View></View> }
         </View>
       </View>
     );
@@ -307,21 +225,27 @@ const styles = StyleSheet.create({
     width: deviceWidth - 100,
     height: 100,
   },
-  oximeteryReading: {
-
+  deviceSpecificComponent: {
+    flex: 3,
   },
-  pulseReading: {
-
+  connectionManagement: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    width: deviceWidth - 60,
   },
-  scanButton: {
-    // minWidth: deviceWidth - 100,
-    // margin: 10,
+  connectionManagementButton: {
+    width: '100%',
   },
   scannedDevice: {
-    margin: 10,
+    width: '100%',
+    borderBottomWidth: 2,
+    // borderColor: '#ee7b22',
+    marginTop: 10,
+    padding: 5,
   },
-  readings: {
-    fontSize: 72,
-    margin: 10,
-  }
+  scannedDeviceText: {
+    fontSize: 18,
+    textAlign: 'center',
+  },
 });
