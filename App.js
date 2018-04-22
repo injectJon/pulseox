@@ -11,9 +11,10 @@ import {
   ToastAndroid } from 'react-native';
 import { BleManager } from 'react-native-ble-plx';
 import base64js from 'base64-js';
+import Icon from 'react-native-vector-icons/dist/MaterialIcons';
 
 // component imports
-import Nonin3230 from './components/Nonin3230';
+import Nonin3230 from './components/Nonin3230/Nonin3230';
 
 // Get device dimensions on startup
 const deviceWidth = Dimensions.get( 'window' ).width;
@@ -31,8 +32,11 @@ export default class App extends React.Component {
       advertisingDevices: new Array(),
       advertisingDeviceNames: new Array(),
       device: '',
+      devicesDetected: true,
       isScanning: false,
       isConnected: false,
+      isEncrypted: false,
+      isLowBattery: false,
     }
 
     this.state = {
@@ -42,6 +46,8 @@ export default class App extends React.Component {
     // context binding for component methods
     this.scanForDevices = this.scanForDevices.bind( this );
     this.disconnectFromDevice = this.disconnectFromDevice.bind( this );
+    this.handleDeviceIsEncrypted = this.handleDeviceIsEncrypted.bind( this );
+    this.handleDeviceLowBattery = this.handleDeviceLowBattery.bind( this );
   }
 
   componentDidMount() {
@@ -74,7 +80,7 @@ export default class App extends React.Component {
           advertisingDevices.push( device );
           advertisingDeviceNames.push( device.name );
 
-          this.setState( { advertisingDevices, advertisingDeviceNames } );
+          this.setState( { advertisingDevices, advertisingDeviceNames, devicesDetected: true } );
         }
       }
     } );
@@ -85,7 +91,7 @@ export default class App extends React.Component {
 
       if ( this.state.advertisingDevices.length < 1 ) {
         // TODO: no nonin devices were found, notify user with a toast
-
+        this.setState( { devicesDetected: false } )
       }
 
     }, 10000 );
@@ -109,6 +115,9 @@ export default class App extends React.Component {
         // handle device disconnect
         device.onDisconnected( ( error, disconnectedDevice ) => {
           this.setState( { ...this.initialState } );
+
+          // hack job, these werent resetting themselves when setting to initialState
+          this.setState( { advertisingDevices: new Array(), advertisingDeviceNames: new Array() } )
         } );
       } )
       .catch( error => {
@@ -127,10 +136,25 @@ export default class App extends React.Component {
       } );
   }
 
+  handleDeviceDisconnect() {
+    this.setState( { isConnected: false } );
+  }
+
+  handleDeviceIsEncrypted( status ) {
+    this.setState( { isEncrypted: status } );
+  }
+
+  handleDeviceLowBattery( status ) {
+    this.setState( { isLowBattery: status } );
+  }
+
   render() {
     // app state constants
     const isConnected = this.state.isConnected;
     const isScanning = this.state.isScanning;
+    const isEncrypted = this.state.isEncrypted;
+    const isLowBattery = this.state.isLowBattery;
+    const devicesDetected = this.state.devicesDetected;
     const device = this.state.device;
     const advertisingDeviceNames = this.state.advertisingDeviceNames;
 
@@ -143,14 +167,47 @@ export default class App extends React.Component {
               ? '#ee7b22'
               : '#4d8ecb'
 
+          const btIconName =
+            isConnected && deviceName === device.name
+              ? 'bluetooth-connected'
+              : 'bluetooth';
+
           return (
-            <TouchableHighlight
-              style={ [ styles.scannedDevice, { borderColor } ] }
-              key={ i }
-              onPress={ this.connectToDevice.bind( this, i ) }
-            >
-              <Text style={ styles.scannedDeviceText }>{ deviceName }</Text>
-            </TouchableHighlight>
+            <View style={ [ styles.scannedDevice, { borderColor } ] }>
+              <Text
+                style={ styles.scannedDeviceText }
+                key={ i }
+                onPress={ this.connectToDevice.bind( this, i ) }
+              >
+                { deviceName }
+              </Text>
+              <View style={ styles.scannedDeviceIconContainer }>
+                {
+                  isConnected &&
+                    <Icon
+                      name={ ( isLowBattery && 'battery-alert' ) || 'battery-full' }
+                      style={ styles.scannedDeviceIcon }
+                      size={ 20 }
+                      color={ ( isLowBattery && '#f45c42' ) || '#8fe228' }
+                    />
+                }
+                {
+                  isConnected &&
+                    <Icon
+                      name='enhanced-encryption'
+                      style={ styles.scannedDeviceIcon }
+                      size={ 20 }
+                      color={ ( isEncrypted && '#ee7b22' ) || '#4d8ecb' }
+                    />
+                }
+                <Icon
+                  name={ btIconName }
+                  style={ styles.scannedDeviceIcon }
+                  size={ 20 }
+                  color={ ( isConnected && '#ee7b22' ) || '#4d8ecb' }
+                />
+              </View>
+            </View>
           );
         } );
 
@@ -190,6 +247,8 @@ export default class App extends React.Component {
           <Nonin3230
             device={ device }
             isConnected={ isConnected }
+            handleDeviceIsEncrypted={ this.handleDeviceIsEncrypted }
+            handleLowBattery={ this.handleDeviceLowBattery }
           />
         )
         : <View></View>
@@ -202,12 +261,19 @@ export default class App extends React.Component {
           source={ require( './assets/nonin.png' ) }
         />
         <View style={ styles.deviceSpecificComponent }>
+
           { deviceSpecificComponent }
+
         </View>
         <View style={ styles.connectionManagement }>
+
+
+          { !devicesDetected && <Text style={ styles.noDevicesDetectedText }>{ 'No Nonin devices were detected.' }</Text> }
+
+          { deviceNames || <View></View> }
+
           { connectionManagementButton }
 
-            { deviceNames || <View></View> }
         </View>
       </View>
     );
@@ -224,6 +290,7 @@ const styles = StyleSheet.create({
   logo: {
     width: deviceWidth - 100,
     height: 100,
+    marginTop: 7,
   },
   deviceSpecificComponent: {
     flex: 3,
@@ -231,21 +298,40 @@ const styles = StyleSheet.create({
   connectionManagement: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'flex-end',
     width: deviceWidth - 60,
   },
   connectionManagementButton: {
     width: '100%',
+    marginBottom: 30,
   },
   scannedDevice: {
-    width: '100%',
-    borderBottomWidth: 2,
-    // borderColor: '#ee7b22',
+    // width: '100%',
+    width: deviceWidth - 60,
+    borderLeftWidth: 4,
     marginTop: 10,
-    padding: 5,
+    marginBottom: 10,
+    paddingTop: 5,
+    paddingBottom: 5,
+    paddingLeft: 10,
+    paddingRight: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   scannedDeviceText: {
     fontSize: 18,
     textAlign: 'center',
+  },
+  noDevicesDetectedText: {
+    paddingBottom: 5,
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  scannedDeviceIconContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  scannedDeviceIcon: {
+
   },
 });
