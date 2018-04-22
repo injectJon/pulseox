@@ -19,3 +19,9 @@ export const DISPLAY_SYNC_COMMAND = Buffer.from( [ 0x61, 0x05 ] ).toString( 'bas
 // Types of
 export const TYPE_OXIMETRY_READING = 'TYPE_OXIMETRY_READING';
 export const TYPE_PULSE_READING = 'TYPE_PULSE_READING';
+
+// Color constants
+export const COLOR_NONIN_ORANGE = '#ee7b22';
+export const COLOR_NONIN_BLUE = '#4d8ecb';
+export const COLOR_LOW_BATTERY = '#f45c42';
+export const COLOR_CHARGED_BATTERY = '#8fe228';
