@@ -2,7 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { BleManager } from 'react-native-ble-plx';
 import base64js from 'base64-js';
-import * as constants from './components/Nonin3230/constants';
+import * as constants from '../constants';
 import{
   StyleSheet,
   Text,
@@ -20,91 +20,107 @@ import {
   EncryptionIcon
 } from './icons';
 
+// action imports
+import {
+  updateConnectionState,
+  addAdvertisingDevice,
+  setDevice,
+  clearDevice
+} from '../actions';
+import * as actionTypes from '../actionTypes';
+
+const deviceWidth = Dimensions.get( 'window' ).width;
+
 export default class ConnectionManager extends React.Component {
   constructor( props ) {
     super( props );
 
     this.manager = new BleManager();
 
-    this.initialState = {
-      advertisingDevices: new Array(),
-      devicesDetected: true, // initialized as true to prevent display on initial render
-      isScanning: false,
-      isConnected: false,
-      isEncrypted: false,
-      isLowBattery: false,
-      device: '',
-    };
-
-    this.state = { ...this.initialState };
-
     this.scanForDevices = this.scanForDevices.bind( this );
     this.disconnectFromDevice = this.disconnectFromDevice.bind( this );
+  }
 
-    // handlers to bubble up connection state
-    this.onScanningEvent = this.props.onScanningEvent;
-    this.onConnectionEvent = this.props.onConnectionEvent;
+  componentWillMount() {
+    // get and subscribe to redux store
+    const { store } = this.context;
 
+    this.store = store;
+
+    this.unsubscribe = store.subscribe( () => this.forceUpdate() );
   }
 
   componentDidMount() {
     // confirm that bluetooth is enabled(?) on the device
     const subscription = this.manager.onStateChange((state) => {
-        if (state === 'PoweredOn') {
-            // this.setState( { btIsPowered: true } );
-            subscription.remove();
-        }
+      if (state === 'PoweredOn') {
+          // this.setState( { btIsPowered: true } );
+          subscription.remove();
+      }
     }, true);
+  }
+
+  componentWillUnmount() {
+    this.unsubscribe();
   }
 
   // gets all advertising nonin devices and stores them in the app state
   scanForDevices() {
-    if ( this.state.isScanning ) return;
+    if ( this.store.getState().scanning ) return;
 
-    // scan for 10sec then notify: no device found
-    this.setState( { isScanning: true } )
-    this.onScanningEvent( true );
+    const scanLength = 10000;
+
+    this.store.dispatch(
+      updateConnectionState( actionTypes.TOGGLE_SCANNING, true ),
+    );
 
     this.manager.startDeviceScan( null, null, ( error, device ) => {
       if ( error ) {
-        this.setState( { isScanning: false } );
-        this.onScanningEvent( false );
+        // toggle scanning to false
+        this.store.dispatch(
+          updateConnectionState( actionTypes.TOGGLE_SCANNING, false ),
+        );
 
         return console.log( error );
       }
 
       if ( device.name && device.name.startsWith( 'Nonin' ) ) {
-        // add the advertising nonin device to the state
-        // only if its not already stored
-        const advertisingDevices = this.state.advertisingDevices;
-        const advertisingDeviceNames = this.state.advertisingDeviceNames;
+        const advertisingDevices = this.store.getState().advertisingDevices;
 
-        if ( advertisingDeviceNames.indexOf( device.name ) < 0 ) {
-          advertisingDevices.push( device );
-          advertisingDeviceNames.push( device.name );
-
-          this.setState( { advertisingDevices, advertisingDeviceNames, devicesDetected: true } );
+        // dont add duplicate devices to list
+        for ( const advertisingDevice of advertisingDevices ) {
+          if ( advertisingDevice.name === device.name) {
+            return; // exit early
+          }
         }
-      }
+
+        // add advertising device
+        this.store.dispatch(
+          addAdvertisingDevice( device )
+        );
+    }
     } );
 
     setTimeout( () => {
       this.manager.stopDeviceScan();
-      this.setState( { isScanning: false } );
+
+      // toggle scanning to false
+      this.store.dispatch(
+        updateConnectionState(
+          actionTypes.TOGGLE_SCANNING,
+          false
+        )
+      );
 
       if ( this.state.advertisingDevices.length < 1 ) {
         // TODO: no nonin devices were found, notify user with a toast
-        this.setState( { devicesDetected: false } );
-        this.onScanningEvent( false );
       }
-
-    }, 10000 );
-
+    }, scanLength );
   }
 
   // takes a device name and connects to said device
   connectToDevice( deviceIndex ) {
-    const device = this.state.advertisingDevices[ deviceIndex ];
+    const device = this.store.getState().advertisingDevices[ deviceIndex ];
 
     // connect to selected device
     this.manager.connectToDevice( device.id )
@@ -112,18 +128,26 @@ export default class ConnectionManager extends React.Component {
         return device.discoverAllServicesAndCharacteristics();
       } )
       .then( device => {
-        // TODO: Toast and ask for spot-check/continuous functionality
-
-        this.setState( { device, isConnected: true } );
-        this.onConnectionEvent( true, device );
+        // set new device
+        this.store.dispatch( setDevice( device ) );
+        // toggle connected to true
+        this.store.dispatch( updateConnectionState(
+          actionTypes.TOGGLE_CONNECTED,
+          true
+        ) );
 
         // handle device disconnect
         device.onDisconnected( ( error, disconnectedDevice ) => {
-          this.setState( { ...this.initialState } );
-          this.onConnectionEvent( false, '' );
 
-          // hack job, these werent resetting themselves when setting to initialState
-          this.setState( { advertisingDevices: new Array() } )
+          // clear device
+          this.store.dispatch( clearDevice() );
+
+          // reset connectionState
+          this.store.dispatch(
+            updateConnectionState(
+              actionTypes.RESET_CONNECTION_STATE
+            )
+          );
         } );
       } )
       .catch( error => {
@@ -134,28 +158,36 @@ export default class ConnectionManager extends React.Component {
 
   disconnectFromDevice() {
     // disconnect and wipe state
-    const device = this.state.device;
+    const device = this.store.getState().device;
 
     device.cancelConnection()
       .then( cancelledDevice => {
-        this.setState( { ...this.initialState } );
-        this.onConnectionEvent( false, '' );
+        // remove device
+        this.store.dispatch( clearDevice() );
+
+        // reset connectionState
+        this.store.dispatch(
+          updateConnectionState(
+            actionTypes.RESET_CONNECTION_STATE
+          )
+        );
       } );
   }
 
   render() {
-    // constants
-    const isConnected = this.state.isConnected;
-    const isScanning = this.state.isScanning;
-    const devicesDetected = this.state.devicesDetected;
-    const device = this.state.device;
-    const advertisingDeviceNames = this.state.advertisingDevices.map( d => d.name );
-    const isEncrypted = this.props.isEncrypted;
-    const isLowBattery = this.props.isLowBattery;
+    const state = this.store.getState();
+
+    const device = state.device;
+    const advertisingDeviceNames = state.advertisingDevices.map( d => d.name )
+
+    const isConnected = state.connectionState.connected;
+    const isScanning = state.connectionState.scanning;
+    const isEncrypted = state.connectionState.encrypted;
+    const isLowBattery = state.connectionState.lowBattery;
 
     const devices =
-      this.state.advertisingDeviceNames.length > 0 &&
-      this.state.advertisingDeviceNames.map( ( deviceName, i ) => {
+      advertisingDeviceNames.length > 0 &&
+      advertisingDeviceNames.map( ( deviceName, i ) => {
         const borderColor =
             isConnected && deviceName === device.name
               ? constants.COLOR_NONIN_ORANGE
@@ -234,9 +266,7 @@ export default class ConnectionManager extends React.Component {
 
         { isScanning && <Text style={ styles.scanningMessages }>{ 'Scanning...' }</Text> }
 
-        { !devicesDetected && <Text style={ styles.scanningMessages }>{ 'No Nonin devices were detected.' }</Text> }
-
-        { deviceNames || <View></View> }
+        { devices || <View></View> }
 
         { connectionManagementButton }
 
@@ -245,14 +275,9 @@ export default class ConnectionManager extends React.Component {
   }
 }
 
-ConnectionManager.propTypes = {
-  // app state change handlers
-  onScanningEvent: PropTypes.func.isRequired,
-  onConnectionEvent: PropTypes.func.isRequired,
-  // app state values
-  isEncrypted: PropTypes.any.isRequired,
-  isLowBattery: PropTypes.any.isRequired,
-};
+ConnectionManager.contextTypes = {
+  store: PropTypes.object,
+}
 
 const styles = StyleSheet.create( {
   container: {

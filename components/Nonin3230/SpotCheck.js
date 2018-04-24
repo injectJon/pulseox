@@ -2,12 +2,17 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import base64js from 'base64-js';
 import Icon from 'react-native-vector-icons/dist/FontAwesome';
-import * as constants from './constants';
+import * as constants from '../../constants';
 import {
   View,
   Text,
   StyleSheet
 } from 'react-native';
+import * as actionTypes from '../../actionTypes';
+import {
+  updateConnectionState,
+  addSpotCheckReading
+} from '../../actions';
 import { Readings } from './Readings';
 
 // 1: turn on indications for spot-check characteristic
@@ -20,19 +25,14 @@ import { Readings } from './Readings';
 export default class SpotCheck extends React.Component {
   constructor( props ) {
     super( props );
+  }
 
-    this.initialState = {
-      isMonitoring: false,
-      isSyncing: false,
-      isSynced: false,
-      encrypted: false,
-      lowBattery: false,
-      spotCheckReadings: new Array(),
-    };
+  componentWillMount() {
+    const { store } = this.context;
 
-    this.state = { ...this.initialState };
+    this.store = store;
 
-    this.monitorDevice = this.monitorDevice.bind( this );
+    this.unsubscribe = store.subscribe( () => this.forceUpdate() );
   }
 
   componentDidMount() {
@@ -41,40 +41,63 @@ export default class SpotCheck extends React.Component {
     this.displaySync();
   }
 
-  monitorDevice() {
-    if ( this.state.isMonitoring ) return;
+  componentWillUnmount() {
+    this.unsubscribe();
+  }
 
-    this.props.device.monitorCharacteristicForService(
+  monitorDevice() {
+    const isMonitoring = this.store.getState().connectionState.monitoring;
+    if ( isMonitoring ) return;
+
+    const device = this.store.getState().device;
+
+    device.monitorCharacteristicForService(
       constants.NONIN_SERVICE_UUID,
       constants.OXIMETRY_MEASUREMENT_UUID,
       ( error, response ) => {
-        if ( error ) this.props.handleDeviceDisconnect();
+        if ( error ) {
+          // reset connection state
+          this.store.dispatch(
+            updateConnectionState(
+              actionTypes.RESET_CONNECTION_STATE
+            )
+          );
+        };
 
         const { status, readings } = this.parsePacketData( response.value );
 
         // console.log( status, readings );
 
-        const spotCheckReadings = this.state.spotCheckReadings;
-
-        if ( status.encrypted ) this.props.handleDeviceIsEncrypted( true );
-        if ( status.lowBattery ) this.props.handleLowBattery( true );
+        // update connectionState
+        this.store.dispatch(
+          updateConnectionState(
+            actionTypes.TOGGLE_ENCRYPTED,
+            status.encrypted
+          )
+        );
+        this.store.dispatch(
+          updateConnectionState(
+            actionTypes.TOGGLE_LOW_BATTERY,
+            status.lowBattery
+          )
+        );
+        this.store.dispatch(
+          updateConnectionState(
+            actionTypes.TOGGLE_SYNCED,
+            status.displaySync
+          )
+        );
 
         if ( status.encrypted && status.displaySync ) {
-          spotCheckReadings.push( readings );
+          this.store.dispatch(
+            addSpotCheckReading( readings )
+          );
         }
 
-        if ( !status.displaySync && this.state.isSynced ) {
+        if ( !status.displaySync && this.store.getState().connectionState.synced ) {
           // spot-check is complete, send Measurement Complete command
           this.sendMeasurementComplete();
         }
-
-        this.setState( {
-          encrypted: status.encrypted,
-          lowBattery: status.lowBattery,
-          isSynced: status.displaySync,
-          spotCheckReadings
-        } );
-
       }
     );
   }
@@ -82,20 +105,22 @@ export default class SpotCheck extends React.Component {
   enableIndications() {
     // NOT WORKING ATM: issues with command decoding on native side ble library ???
     // ERROR: 'java.lang.Double cannot be cast to java.lang.String'
+    const device = this.store.getState().device;
 
-    this.props.device.writeCharacteristicWithoutResponseForService( // do we expect a response?
+    device.writeCharacteristicWithoutResponseForService( // do we expect a response?
       constants.PLX_SERVICE_UUID,
       constants.PLX_SPOTCHECK_MEASUREMENT_UUID,
       constants.SPOTCHECK_INDICATION_COMMAND
     )
-      // .then( ( error, response ) => base64js.toByteArray( response.value ) )
-      // .then( response => console.log( response ) )
+      .then( ( error, response ) => base64js.toByteArray( response.value ) )
+      .then( response => console.log( response ) )
 
   }
 
   displaySync() {
+    const device = this.store.getState().device;
 
-    this.props.device.writeCharacteristicWithResponseForService(
+    device.writeCharacteristicWithResponseForService(
       constants.NONIN_SERVICE_UUID,
       constants.CONTROL_POINT_UUID,
       constants.DISPLAY_SYNC_COMMAND
@@ -109,8 +134,9 @@ export default class SpotCheck extends React.Component {
   }
 
   sendMeasurementComplete() {
+    const device = this.store.getState().device;
 
-    this.props.device.writeCharacteristicWithResponseForService(
+    device.writeCharacteristicWithResponseForService(
       constants.NONIN_SERVICE_UUID,
       constants.CONTROL_POINT_UUID,
       constants.MEASUREMENT_COMPLETE_COMMAND
@@ -158,19 +184,14 @@ export default class SpotCheck extends React.Component {
   }
 
   render() {
+    let state = this.store.getState();
+
+    let isSynced = state.connectionState.synced;
+
     let readings =
-      this.state.spotCheckReadings[ this.state.spotCheckReadings.length - 1 ] ||
+      state.spotCheck[ state.spotCheck.length - 1 ] &&
+      state.spotCheck[ state.spotCheck.length - 1 ].reading ||
       { pulse: '- -', oximetry: '- -' };
-
-    let isEncrypted =
-      this.state.encrypted
-        ? <Text>{ 'ENCRYPTED!' }</Text>
-        : <Text>{ 'Not Encrypted.' }</Text>
-
-    let isSynced =
-      this.state.isSynced
-        ? <Text>{ 'SYNCED!' }</Text>
-        : <Text>{ 'Not Synced.' }</Text>
 
     return (
       <View style={ styles.container }>
@@ -178,7 +199,7 @@ export default class SpotCheck extends React.Component {
         <View style={ styles.readingsContainer }>
           <Readings
             data={ readings }
-            isSynced={ this.state.isSynced }
+            isSynced={ isSynced }
           />
         </View>
       </View>
@@ -186,11 +207,8 @@ export default class SpotCheck extends React.Component {
   }
 };
 
-SpotCheck.propTypes = {
-  device: PropTypes.object.isRequired,
-  handleDeviceIsEncrypted: PropTypes.func.isRequired,
-  handleLowBattery: PropTypes.func.isRequired,
-  handleDeviceDisconnect: PropTypes.func.isRequired,
+SpotCheck.contextTypes = {
+  store: PropTypes.object,
 };
 
 const styles = StyleSheet.create( {

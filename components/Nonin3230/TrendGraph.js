@@ -13,7 +13,7 @@ import {
 import PropTypes from 'prop-types';
 import moment from 'moment';
 
-import * as constants from './constants';
+import * as constants from '../../constants';
 
 const deviceWidth = Dimensions.get( 'window' ).width;
 

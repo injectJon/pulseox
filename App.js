@@ -1,14 +1,34 @@
 import React from 'react';
+import { createStore } from 'redux';
+import { Provider } from 'react-redux';
+import pulseoxApp from './reducers';
 import {
   StyleSheet,
   View,
   Image,
   Dimensions,
   ToastAndroid } from 'react-native';
-import * as constants from './components/Nonin3230/constants';
+import * as constants from './constants';
+
+const initialState = {
+  device: '',
+  spotCheck: new Array(),
+  continuousCheck: new Array(),
+  advertisingDevices: new Array(),
+  connectionState: {
+    scanning: false,
+    connected: false,
+    encrypted: false,
+    lowBattery: false,
+    monitoring: false,
+    syncing: false,
+    synced: false,
+  },
+}
 
 // component imports
-import Nonin3230 from './components/Nonin3230/Nonin3230';
+import Nonin3230 from './containers/Nonin3230';
+import { Logo } from './components/Logo';
 import ConnectionManager from './components/ConnectionManager';
 
 // Get device dimensions on startup
@@ -20,90 +40,25 @@ const deviceHeight = Dimensions.get( 'window' ).height;
 export default class App extends React.Component {
   constructor( props ) {
     super( props );
-
-    this.initialState = {
-      device: '',
-      isScanning: false,
-      isConnected: false,
-      isEncrypted: false,
-      isLowBattery: false,
-    }
-
-    this.state = {
-      ...this.initialState
-    };
-
-    // context binding for component methods
-    this.handleDeviceIsEncrypted = this.handleDeviceIsEncrypted.bind( this );
-    this.handleDeviceLowBattery = this.handleDeviceLowBattery.bind( this );
-    this.onConnectionEvent = this.onConnectionEvent.bind( this );
-    this.onScanningEvent = this.onScanningEvent.bind( this );
-  }
-
-  handleDeviceDisconnect() {
-    this.setState( { isConnected: false } );
-  }
-
-  handleDeviceIsEncrypted( status ) {
-    this.setState( { isEncrypted: status } );
-  }
-
-  handleDeviceLowBattery( status ) {
-    this.setState( { isLowBattery: status } );
-  }
-
-  onConnectionEvent( isConnected, device ) {
-    if ( !isConnected || !device ) {
-      this.setState( { ...this.initialState } );
-      return;
-    }
-
-    this.setState( { isConnected, device } )
-  }
-
-  onScanningEvent( isScanning ) {
-    this.setState( { isScanning } );
   }
 
   render() {
-    // app state constants
-    const isConnected = this.state.isConnected;
-    const isScanning = this.state.isScanning;
-    const isEncrypted = this.state.isEncrypted;
-    const isLowBattery = this.state.isLowBattery;
-    const device = this.state.device;
-
-    const deviceSpecificComponent =
-      isConnected
-        ? (
-          <Nonin3230
-            device={ device }
-            isConnected={ isConnected }
-            handleDeviceIsEncrypted={ this.handleDeviceIsEncrypted }
-            handleLowBattery={ this.handleDeviceLowBattery }
-          />
-        )
-        : <View></View>
-
     return (
-      <View style={ styles.container }>
+      <Provider store={ createStore( pulseoxApp, initialState ) }>
+        <View style={ styles.container }>
 
-        <Image
-          style={ styles.logo }
-          source={ require( './assets/nonin.png' ) }
-        />
-        <View style={ styles.deviceSpecificComponent }>
+          <Logo />
 
-          { deviceSpecificComponent }
+          <View style={ styles.deviceSpecificComponent }>
+
+            <Nonin3230 />
+
+          </View>
+
+          <ConnectionManager />
 
         </View>
-        <ConnectionManager
-          onScanningEvent={ this.onScanningEvent }
-          onConnectionEvent={ this.onConnectionEvent }
-          isEncrypted={ isEncrypted }
-          isLowBattery={ isLowBattery }
-        />
-      </View>
+      </Provider>
     );
   }
 }
@@ -114,11 +69,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'flex-start',
-  },
-  logo: {
-    width: deviceWidth - 100,
-    height: 100,
-    marginTop: 7,
   },
   deviceSpecificComponent: {
     flex: 3,

@@ -8,7 +8,7 @@ import {
   Dimensions } from 'react-native';
 import PropTypes from 'prop-types';
 import Icon from 'react-native-vector-icons/dist/FontAwesome';
-import * as constants from './constants';
+import * as constants from '../../constants';
 
 export const Readings = ( props ) => {
   const { data, isSynced } = props;

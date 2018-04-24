@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import Icon from 'react-native-vector-icons/dist/MaterialIcons';
-import * as constants from '../Nonin3230/constants';
+import * as constants from '../../constants';
 
 export const EncryptionIcon = ( props ) => {
   const { isEncrypted, size, style } = props;
