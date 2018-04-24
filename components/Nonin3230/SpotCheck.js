@@ -1,7 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import base64js from 'base64-js';
-import Icon from 'react-native-vector-icons/dist/FontAwesome';
 import * as constants from '../../constants';
 import {
   View,
@@ -38,7 +37,7 @@ export default class SpotCheck extends React.Component {
 
   componentDidMount() {
     this.monitorDevice();
-    this.enableIndications();
+    // this.enableIndications();
     this.displaySync();
   }
 

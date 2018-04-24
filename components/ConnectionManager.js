@@ -28,7 +28,8 @@ import {
   clearDevice,
   clearAdvertisingDevices,
   removeAdvertisingDevice,
-  clearSpotCheckReadings
+  clearSpotCheckReadings,
+  clearContinuousCheckReadings,
 } from '../actions';
 import * as actionTypes from '../actionTypes';
 
@@ -187,6 +188,7 @@ export default class ConnectionManager extends React.Component {
     dispatch( clearDevice() );
     dispatch( clearAdvertisingDevices() );
     dispatch( clearSpotCheckReadings() );
+    dispatch( clearContinuousCheckReadings() );
     dispatch( updateConnectionState( actionTypes.RESET_CONNECTION_STATE ) );
   }
 

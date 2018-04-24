@@ -49,7 +49,7 @@ const spotCheck = ( state = initialState.spotCheck, action ) => {
 
 const continuousCheck = ( state = initialState.continuousCheck, action ) => {
   switch( action.type ) {
-    case actionTypes.ADD_CONTINUOUS_READING:
+    case actionTypes.ADD_CONTINUOUSCHECK_READING:
       return [
         ...state,
         {

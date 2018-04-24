@@ -40,7 +40,7 @@ export const Readings = ( props ) => {
 
 Readings.propTypes = {
   data: PropTypes.object.isRequired,
-  isSynced: PropTypes.any.isRequired,
+  isSynced: PropTypes.any,
 };
 
 const styles = StyleSheet.create( {
