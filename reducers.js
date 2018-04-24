@@ -78,7 +78,7 @@ const advertisingDevices = ( state = initialState.advertisingDevices, action ) =
         }
       } );
     case actionTypes.CLEAR_ADVERTISING_DEVICES:
-      return [];
+      return new Array();
     default:
       return state;
   }

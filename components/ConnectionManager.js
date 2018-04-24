@@ -25,7 +25,10 @@ import {
   updateConnectionState,
   addAdvertisingDevice,
   setDevice,
-  clearDevice
+  clearDevice,
+  clearAdvertisingDevices,
+  removeAdvertisingDevice,
+  clearSpotCheckReadings
 } from '../actions';
 import * as actionTypes from '../actionTypes';
 
@@ -98,11 +101,32 @@ export default class ConnectionManager extends React.Component {
         this.store.dispatch(
           addAdvertisingDevice( device )
         );
-    }
+      }
     } );
 
     setTimeout( () => {
       this.manager.stopDeviceScan();
+
+      // if we are connected, dont remove connected device
+      // from the list of advertising devices... its a feature
+      const state = this.store.getState();
+      const device = state.device;
+      const advertisingDevices = state.advertisingDevices;
+
+      if ( !device ) {
+        this.store.dispatch(
+          clearAdvertisingDevices()
+        );
+      } else {
+        for ( const advertisingDevice of advertisingDevices ) {
+          if ( advertisingDevice.id !== device.id ) {
+            this.store.dispatch(
+              removeAdvertisingDevice( advertisingDevice.id )
+            );
+          }
+        }
+      }
+
 
       // toggle scanning to false
       this.store.dispatch(
@@ -112,7 +136,7 @@ export default class ConnectionManager extends React.Component {
         )
       );
 
-      if ( this.state.advertisingDevices.length < 1 ) {
+      if ( state.advertisingDevices.length < 1 ) {
         // TODO: no nonin devices were found, notify user with a toast
       }
     }, scanLength );
@@ -138,16 +162,7 @@ export default class ConnectionManager extends React.Component {
 
         // handle device disconnect
         device.onDisconnected( ( error, disconnectedDevice ) => {
-
-          // clear device
-          this.store.dispatch( clearDevice() );
-
-          // reset connectionState
-          this.store.dispatch(
-            updateConnectionState(
-              actionTypes.RESET_CONNECTION_STATE
-            )
-          );
+          this.onDisconnect();
         } );
       } )
       .catch( error => {
@@ -162,23 +177,28 @@ export default class ConnectionManager extends React.Component {
 
     device.cancelConnection()
       .then( cancelledDevice => {
-        // remove device
-        this.store.dispatch( clearDevice() );
-
-        // reset connectionState
-        this.store.dispatch(
-          updateConnectionState(
-            actionTypes.RESET_CONNECTION_STATE
-          )
-        );
+        this.onDisconnect();
       } );
+  }
+
+  onDisconnect() {
+    const dispatch = this.store.dispatch;
+
+    dispatch( clearDevice() );
+    dispatch( clearAdvertisingDevices() );
+    dispatch( clearSpotCheckReadings() );
+    dispatch( updateConnectionState( actionTypes.RESET_CONNECTION_STATE ) );
   }
 
   render() {
     const state = this.store.getState();
 
     const device = state.device;
-    const advertisingDeviceNames = state.advertisingDevices.map( d => d.name )
+
+    const advertisingDeviceNames =
+      state.advertisingDevices.length > 0 // ['Nonin']
+        ? state.advertisingDevices.map( d => d.name )
+        : [];
 
     const isConnected = state.connectionState.connected;
     const isScanning = state.connectionState.scanning;
@@ -189,7 +209,7 @@ export default class ConnectionManager extends React.Component {
       advertisingDeviceNames.length > 0 &&
       advertisingDeviceNames.map( ( deviceName, i ) => {
         const borderColor =
-            isConnected && deviceName === device.name
+            isConnected && deviceName === device.name // shouldnt have to check if device exists ???
               ? constants.COLOR_NONIN_ORANGE
               : constants.COLOR_NONIN_BLUE;
 

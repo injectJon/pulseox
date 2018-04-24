@@ -11,7 +11,8 @@ import {
 import * as actionTypes from '../../actionTypes';
 import {
   updateConnectionState,
-  addSpotCheckReading
+  addSpotCheckReading,
+  clearAdvertisingDevices
 } from '../../actions';
 import { Readings } from './Readings';
 
@@ -37,7 +38,7 @@ export default class SpotCheck extends React.Component {
 
   componentDidMount() {
     this.monitorDevice();
-    // this.enableIndications();
+    this.enableIndications();
     this.displaySync();
   }
 
@@ -56,17 +57,15 @@ export default class SpotCheck extends React.Component {
       constants.OXIMETRY_MEASUREMENT_UUID,
       ( error, response ) => {
         if ( error ) {
-          // reset connection state
-          this.store.dispatch(
-            updateConnectionState(
-              actionTypes.RESET_CONNECTION_STATE
-            )
-          );
-        };
+          console.log( error );
+        }
 
         const { status, readings } = this.parsePacketData( response.value );
 
-        // console.log( status, readings );
+        if ( !status.displaySync && this.store.getState().connectionState.synced ) {
+          // spot-check is complete, send Measurement Complete command
+          this.sendMeasurementComplete();
+        }
 
         // update connectionState
         this.store.dispatch(
@@ -92,11 +91,6 @@ export default class SpotCheck extends React.Component {
           this.store.dispatch(
             addSpotCheckReading( readings )
           );
-        }
-
-        if ( !status.displaySync && this.store.getState().connectionState.synced ) {
-          // spot-check is complete, send Measurement Complete command
-          this.sendMeasurementComplete();
         }
       }
     );
@@ -161,8 +155,6 @@ export default class SpotCheck extends React.Component {
 
       statusBits[ i ] = mod;
     }
-
-    // console.log( statusBits );
 
     const status = {
       encrypted: statusBits[ 1 ],
