@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import base64js from 'base64-js';
 import Icon from 'react-native-vector-icons/dist/FontAwesome';
 import moment from 'moment';
+import * as constants from '../constants'
 import {
   StyleSheet,
   Text,
@@ -10,10 +11,13 @@ import {
   Button,
   ToastAndroid,
   Alert,
-  Dimensions } from 'react-native';
+  Dimensions
+} from 'react-native';
+import {
+  runningSpotCheck,
+  runningContinuousCheck
+} from '../actions';
 
-// import constants
-import * as constants from '../constants'
 
 // component imports
 import SpotCheck from '../components/Nonin3230/SpotCheck';
@@ -25,16 +29,6 @@ const deviceWidth = Dimensions.get( 'window' ).width;
 export default class Nonin3230 extends React.Component {
   constructor( props ) {
     super( props );
-
-    this.initialState = {
-      runningSpotCheck: false,
-      runningContinuous: false,
-    }
-
-    this.state = { ...this.initialState };
-
-    this.runSpotCheck = this.runSpotCheck.bind( this );
-    this.runContinuous = this.runContinuous.bind( this );
   }
 
   componentWillMount() {
@@ -42,10 +36,6 @@ export default class Nonin3230 extends React.Component {
     this.store = store;
 
     this.unsubscribe = store.subscribe( () => this.forceUpdate() );
-  }
-
-  componentDidMount() {
-
   }
 
   componentWillUnmount() {
@@ -58,28 +48,27 @@ export default class Nonin3230 extends React.Component {
       'Choose a task to perform.',
       [
         {text: 'Spot-Check', onPress: () => this.runSpotCheck(), style: 'positive'},
-        {text: 'Continuous', onPress: () => this.runContinuous(), style: 'positive'},
+        {text: 'Continuous', onPress: () => this.runContinuousCheck(), style: 'positive'},
       ],
       { cancelable: false }
     );
   }
 
   runSpotCheck() {
-    this.setState( { runningSpotCheck: true, runningContinuous: false } );
+    this.store.dispatch( runningSpotCheck( true ) );
   }
 
-  runContinuous() {
-    this.setState( { runningContinuous: true, runningSpotCheck: false } );
+  runContinuousCheck() {
+    this.store.dispatch( runningContinuousCheck( true ) );
   }
 
   render() {
     const state = this.store.getState();
     const isConnected = state.connectionState.connected;
+    const runningSpotCheck = state.uiState.runningSpotCheck;
+    const runningContinuousCheck = state.uiState.runningContinuousCheck;
 
-    const runningSpotCheck = this.state.runningSpotCheck;
-    const runningContinuous = this.state.runningContinuous;
-
-    if ( isConnected && !runningSpotCheck && !runningContinuous) {
+    if ( isConnected && ( !runningSpotCheck && !runningContinuousCheck ) ) {
       this.runTaskAlert();
     }
 
@@ -92,7 +81,7 @@ export default class Nonin3230 extends React.Component {
         }
         {
           isConnected &&
-          runningContinuous &&
+          runningContinuousCheck &&
             <Continuous />
         }
       </View>

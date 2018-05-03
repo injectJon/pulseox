@@ -8,6 +8,10 @@ const initialState = {
   spotCheck: new Array(),
   continuousCheck: new Array(),
   advertisingDevices: new Array(),
+  trendDomains: {
+    oximetry: new Array(),
+    pulse: new Array(),
+  },
   connectionState: {
     scanning: false,
     connected: false,
@@ -17,6 +21,10 @@ const initialState = {
     syncing: false,
     synced: false,
   },
+  uiState: {
+    runningSpotCheck: false,
+    runningContinuousCheck: false,
+  }
 }
 
 const device = ( state = initialState.device, action ) => {
@@ -84,6 +92,27 @@ const advertisingDevices = ( state = initialState.advertisingDevices, action ) =
   }
 };
 
+const trendDomains = ( state = initialState.trendDomains, action ) => {
+  switch( action.type ) {
+    case actionTypes.UPDATE_OXIMETRY_DOMAIN:
+      return {
+        ...state,
+        oximetry: [ action.min, action.max ],
+      };
+    case actionTypes.UPDATE_PULSE_DOMAIN:
+      return {
+        ...state,
+        pulse: [ action.min, action.max ],
+      };
+    case actionTypes.CLEAR_TREND_DOMAINS:
+      return {
+        ...initialState.trendDomains,
+      };
+    default:
+      return state;
+  }
+}
+
 const connectionState = ( state = initialState.connectionState, action ) => {
   switch( action.type ) {
     case actionTypes.TOGGLE_SCANNING:
@@ -138,12 +167,35 @@ const connectionState = ( state = initialState.connectionState, action ) => {
   }
 };
 
+const uiState = ( state = initialState.uiState, action ) => {
+  switch( action.type ) {
+    case actionTypes.TOGGLE_SPOT_CHECK:
+      return {
+        ...state,
+        runningSpotCheck: action.status,
+      };
+    case actionTypes.TOGGLE_CONTINUOUS_CHECK:
+      return {
+        ...state,
+        runningContinuousCheck: action.status,
+      };
+    case actionTypes.RESET_UI_STATE:
+      return {
+        ...initialState.uiState
+      };
+    default:
+      return state;
+  }
+};
+
 const pulseoxApp = combineReducers( {
   device,
   advertisingDevices,
   spotCheck,
   continuousCheck,
+  trendDomains,
   connectionState,
+  uiState,
 } );
 
 export default pulseoxApp;

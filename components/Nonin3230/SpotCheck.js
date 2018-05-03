@@ -10,8 +10,7 @@ import {
 import * as actionTypes from '../../actionTypes';
 import {
   updateConnectionState,
-  addSpotCheckReading,
-  clearAdvertisingDevices
+  addSpotCheckReading
 } from '../../actions';
 import { Readings } from './Readings';
 
@@ -56,7 +55,7 @@ export default class SpotCheck extends React.Component {
       constants.OXIMETRY_MEASUREMENT_UUID,
       ( error, response ) => {
         if ( error ) {
-          console.log( error );
+          // console.log( error );
         }
 
         const { status, readings } = this.parsePacketData( response.value );

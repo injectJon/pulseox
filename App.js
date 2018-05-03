@@ -10,11 +10,17 @@ import {
   ToastAndroid } from 'react-native';
 import * as constants from './constants';
 
+import AppContainer from './components/AppContainer';
+
 const initialState = {
   device: '',
   spotCheck: new Array(),
   continuousCheck: new Array(),
   advertisingDevices: new Array(),
+  trendDomains: {
+    oximetry: new Array(),
+    pulse: new Array(),
+  },
   connectionState: {
     scanning: false,
     connected: false,
@@ -24,18 +30,11 @@ const initialState = {
     syncing: false,
     synced: false,
   },
+  uiState: {
+    runningSpotCheck: false,
+    runningContinuousCheck: false,
+  }
 }
-
-// component imports
-import Nonin3230 from './containers/Nonin3230';
-import { Logo } from './components/Logo';
-import ConnectionManager from './components/ConnectionManager';
-
-// Get device dimensions on startup
-const deviceWidth = Dimensions.get( 'window' ).width;
-const deviceHeight = Dimensions.get( 'window' ).height;
-
-// TODO: use AsyncStorage to store paired devices
 
 export default class App extends React.Component {
   constructor( props ) {
@@ -45,19 +44,7 @@ export default class App extends React.Component {
   render() {
     return (
       <Provider store={ createStore( pulseoxApp, initialState ) }>
-        <View style={ styles.container }>
-
-          <Logo />
-
-          <View style={ styles.deviceSpecificComponent }>
-
-            <Nonin3230 />
-
-          </View>
-
-          <ConnectionManager />
-
-        </View>
+        <AppContainer />
       </Provider>
     );
   }

@@ -30,6 +30,8 @@ import {
   removeAdvertisingDevice,
   clearSpotCheckReadings,
   clearContinuousCheckReadings,
+  clearTrendDomains,
+  resetUiState
 } from '../actions';
 import * as actionTypes from '../actionTypes';
 
@@ -167,7 +169,7 @@ export default class ConnectionManager extends React.Component {
         } );
       } )
       .catch( error => {
-        console.error( error );
+        // console.error( error );
       } );
 
   }
@@ -176,9 +178,11 @@ export default class ConnectionManager extends React.Component {
     // disconnect and wipe state
     const device = this.store.getState().device;
 
+    // this.onDisconnect();
+
     device.cancelConnection()
       .then( cancelledDevice => {
-        this.onDisconnect();
+        // this.onDisconnect();
       } );
   }
 
@@ -189,7 +193,11 @@ export default class ConnectionManager extends React.Component {
     dispatch( clearAdvertisingDevices() );
     dispatch( clearSpotCheckReadings() );
     dispatch( clearContinuousCheckReadings() );
+    dispatch( clearTrendDomains() );
     dispatch( updateConnectionState( actionTypes.RESET_CONNECTION_STATE ) );
+    dispatch( resetUiState() );
+
+    console.log( 'ran onDisconnect from ConnectionManager' );
   }
 
   render() {
@@ -259,7 +267,6 @@ export default class ConnectionManager extends React.Component {
             <Button
               title={ 'Scan for Devices' }
               disabled={ true }
-              onPress={ this.scanForDevices }
             />
           )
         : (

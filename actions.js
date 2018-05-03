@@ -20,7 +20,7 @@ export const clearDevice = () => {
 export const addSpotCheckReading = ( reading ) => {
   return {
     type: actionTypes.ADD_SPOTCHECK_READING,
-    timestamp: moment().milliseconds(),
+    timestamp: moment().valueOf(),
     reading,
   };
 };
@@ -35,7 +35,7 @@ export const clearSpotCheckReadings = () => {
 export const addContinuousCheckReading = ( reading ) => {
   return {
     type: actionTypes.ADD_CONTINUOUSCHECK_READING,
-    timestamp: moment().milliseconds(),
+    timestamp: moment().valueOf(),
     reading,
   };
 };
@@ -67,11 +67,55 @@ export const clearAdvertisingDevices = () => {
   };
 };
 
+// Trend actions
+export const updateOximetryTrendDomain = ( domain ) => {
+  return {
+    type: actionTypes.UPDATE_OXIMETRY_DOMAIN,
+    min: domain[0],
+    max: domain[1],
+  };
+};
+
+export const updatePulseTrendDomain = ( domain ) => {
+  return {
+    type: actionTypes.UPDATE_PULSE_DOMAIN,
+    min: domain[0],
+    max: domain[1],
+  };
+};
+
+export const clearTrendDomains = () => {
+  return {
+    type: actionTypes.CLEAR_TREND_DOMAINS,
+  };
+};
+
 // Connection State actions
 export const updateConnectionState = ( type, status ) => {
   return {
     type,
     status, // true or false
+  };
+};
+
+// UI State actions
+export const runningSpotCheck = ( status ) => {
+  return {
+    type: actionTypes.TOGGLE_SPOT_CHECK,
+    status,
+  };
+};
+
+export const runningContinuousCheck = ( status ) => {
+  return {
+    type: actionTypes.TOGGLE_CONTINUOUS_CHECK,
+    status,
+  };
+};
+
+export const resetUiState = () => {
+  return {
+    type: actionTypes.RESET_UI_STATE,
   };
 };
 

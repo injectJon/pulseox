@@ -9,9 +9,12 @@ import {
 import * as actionTypes from '../../actionTypes';
 import {
   addContinuousCheckReading,
-  updateConnectionState
+  updateConnectionState,
+  updateOximetryTrendDomain,
+  updatePulseTrendDomain
 } from '../../actions';
 import { Readings } from './Readings';
+import { TrendGraph } from './TrendGraph';
 
 
 // PLX Continuous Measurement, characteristic UUID 0x2A5F
@@ -52,12 +55,49 @@ export default class Continuous extends React.Component {
         }
 
         const { status, readings } = this.parsePacketData( response.value );
-        // console.log( readings );
 
-        // if ( !status.displaySync && this.store.getState().connectionState.synced ) {
-        //   // spot-check is complete, send Measurement Complete command
-        //   this.sendMeasurementComplete();
-        // }
+        // check/update trendDomains if necessary
+        const oximetryDomain = [ ...this.store.getState().trendDomains.oximetry ];
+        const newOxDomain = [];
+        const pulseDomain = [ ...this.store.getState().trendDomains.pulse ];
+        const newPulseDomain = [];
+
+        if ( oximetryDomain.length < 1 ) {
+          // set current reading as both min and max
+          oximetryDomain[ 0 ] = readings.oximetry;
+          oximetryDomain[ 1 ] = readings.oximetry;
+        } else {
+          if ( readings.oximetry < oximetryDomain[ 0 ] ){
+            // new min reading
+            oximetryDomain[ 0 ] = readings.oximetry;
+          } else if ( readings.oximetry > oximetryDomain[ 1 ] ) {
+            //new max reading
+            oximetryDomain[ 1 ] = readings.oximetry;
+          }
+        }
+
+        if ( pulseDomain.length < 1 ) {
+          // set current reading as both min and max
+          pulseDomain[ 0 ] = readings.pulse;
+          pulseDomain[ 1 ] = readings.pulse;
+        } else {
+          if ( readings.pulse < pulseDomain[ 0 ] ){
+            // new min reading
+            pulseDomain[ 0 ] = readings.pulse;
+          } else if ( readings.pulse > pulseDomain[ 1 ] ) {
+            //new max reading
+            pulseDomain[ 1 ] = readings.pulse;
+          }
+        }
+
+        // update trendDomains
+        // TODO: only update trendDomains if changes are made to domains
+        this.store.dispatch(
+          updateOximetryTrendDomain( oximetryDomain )
+        );
+        this.store.dispatch(
+          updatePulseTrendDomain( pulseDomain )
+        );
 
         // update connectionState
         this.store.dispatch(
@@ -120,6 +160,8 @@ export default class Continuous extends React.Component {
 
   render() {
     let state = this.store.getState();
+    let pulseDomain = [ ...state.trendDomains.pulse ];
+    let oximetryDomain = [ ...state.trendDomains.oximetry ];
 
     // console.log( state.continuousCheck );
 
@@ -136,6 +178,13 @@ export default class Continuous extends React.Component {
             isSynced={ false }
           />
         </View>
+        <View style={ styles.trendsContainer }>
+          {/* <TrendGraph
+            data={ state.continuousCheck }
+            pulseDomain={ pulseDomain }
+            oximetryDomain={ oximetryDomain }
+          /> */}
+        </View>
       </View>
     );
   }
@@ -148,10 +197,14 @@ Continuous.contextTypes = {
 const styles = StyleSheet.create( {
   container: {
     flex: 1,
+    paddingTop: 20
   },
   readingsContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  }
+  },
+  trendsContainer: {
+    flex: 2,
+  },
 } );
